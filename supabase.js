@@ -1,17 +1,6 @@
 /* =========================================================
    Beads Task
    Supabase Database Module
-
-   设计原则：
-
-   1. 数据库正常：
-      实时上传
-
-   2. 数据库连接失败：
-      实验继续
-      本地 CSV 正常工作
-
-   3. 不因为数据库异常中止实验
 ========================================================= */
 
 
@@ -31,24 +20,15 @@ function setDBStatus(
 
 
     if (!el) {
-
         return;
-
     }
 
 
     el.textContent =
-        "数据库：" +
-        text;
+        "数据库：" + text;
 
 
-    /* -------------------------
-       正常
-    ------------------------- */
-
-    if (
-        status === "ok"
-    ) {
+    if (status === "ok") {
 
         el.style.background =
             "#d9f5d9";
@@ -56,18 +36,9 @@ function setDBStatus(
         el.style.color =
             "#176b17";
 
-        return;
-
     }
 
-
-    /* -------------------------
-       失败
-    ------------------------- */
-
-    if (
-        status === "error"
-    ) {
+    else if (status === "error") {
 
         el.style.background =
             "#ffd6d6";
@@ -75,20 +46,17 @@ function setDBStatus(
         el.style.color =
             "#8b0000";
 
-        return;
-
     }
 
+    else {
 
-    /* -------------------------
-       等待
-    ------------------------- */
+        el.style.background =
+            "#eeeeee";
 
-    el.style.background =
-        "#eeeeee";
+        el.style.color =
+            "#333333";
 
-    el.style.color =
-        "#333333";
+    }
 
 }
 
@@ -123,11 +91,10 @@ else {
     try {
 
         supabaseClient =
-            window.supabase
-                .createClient(
-                    SUPABASE_URL,
-                    SUPABASE_KEY
-                );
+            window.supabase.createClient(
+                SUPABASE_URL,
+                SUPABASE_KEY
+            );
 
 
         console.log(
@@ -196,14 +163,10 @@ function wait(ms) {
 
 
 /* =========================================================
-   生成合法 UUID
+   生成标准 UUID
 ========================================================= */
 
 function generateSessionID() {
-
-    /*
-        新版浏览器
-    */
 
     if (
         window.crypto &&
@@ -218,9 +181,8 @@ function generateSessionID() {
 
 
     /*
-        老浏览器 / WebView fallback
-
-        仍然生成标准 UUID v4 格式
+        老浏览器 / 微信 WebView fallback
+        仍生成标准 UUID v4 格式
     */
 
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx"
@@ -246,10 +208,7 @@ function generateSessionID() {
                         );
 
 
-                return v
-                    .toString(
-                        16
-                    );
+                return v.toString(16);
 
             }
         );
@@ -258,29 +217,26 @@ function generateSessionID() {
 
 
 /* =========================================================
-   创建 Session
+   创建 / 恢复 Session
+
+   preferredSessionID:
+   - 新实验：不传
+   - 恢复实验：传旧 session_id
 ========================================================= */
 
 async function createBeadsSession(
-    subjectID
+    subjectID,
+    preferredSessionID
 ) {
 
     /*
-        Supabase SDK 没有加载：
-
-        不报致命错误，
-        直接切换本地保存。
+        数据库不可用：
+        实验继续、本地保存。
     */
 
     if (
         !supabaseClient
     ) {
-
-        console.warn(
-            "Supabase unavailable. " +
-            "Beads experiment will continue locally."
-        );
-
 
         setDBStatus(
             "连接不可用，仅本地保存",
@@ -293,10 +249,6 @@ async function createBeadsSession(
     }
 
 
-    /*
-        避免重复创建
-    */
-
     if (
         currentBeadsSessionID
     ) {
@@ -307,6 +259,7 @@ async function createBeadsSession(
 
 
     currentBeadsSessionID =
+        preferredSessionID ||
         generateSessionID();
 
 
@@ -324,7 +277,7 @@ async function createBeadsSession(
 
         try {
 
-            var result =
+            var response =
                 await supabaseClient
                     .from(
                         "beads_sessions"
@@ -340,8 +293,12 @@ async function createBeadsSession(
                     });
 
 
+            /* ==============================
+               新 Session 创建成功
+            ============================== */
+
             if (
-                !result.error
+                !response.error
             ) {
 
                 console.log(
@@ -361,11 +318,39 @@ async function createBeadsSession(
             }
 
 
+            /* ==============================
+               23505 = Session 已存在
+
+               恢复旧实验时这是正常情况
+            ============================== */
+
+            if (
+                response.error.code ===
+                "23505"
+            ) {
+
+                console.log(
+                    "Supabase: existing Beads session reused:",
+                    currentBeadsSessionID
+                );
+
+
+                setDBStatus(
+                    "连接正常",
+                    "ok"
+                );
+
+
+                return true;
+
+            }
+
+
             console.error(
                 "Supabase: session creation attempt " +
                 attempt +
                 " failed:",
-                result.error
+                response.error
             );
 
 
@@ -413,7 +398,7 @@ async function createBeadsSession(
 
     console.warn(
         "Supabase unavailable. " +
-        "Experiment will continue with local CSV."
+        "Experiment will continue locally."
     );
 
 
@@ -436,13 +421,6 @@ async function uploadBeadsDraw(
     drawData
 ) {
 
-    /*
-        没数据库：
-
-        直接跳过上传，
-        不影响实验。
-    */
-
     if (
         !supabaseClient
     ) {
@@ -459,7 +437,7 @@ async function uploadBeadsDraw(
 
 
     /*
-        等待 Session 创建结果
+        等待 Session 创建
     */
 
     if (
@@ -473,12 +451,6 @@ async function uploadBeadsDraw(
         if (
             !sessionOK
         ) {
-
-            console.warn(
-                "Supabase: draw retained locally because " +
-                "session creation failed."
-            );
-
 
             setDBStatus(
                 "未连接，仅本地保存",
@@ -496,11 +468,6 @@ async function uploadBeadsDraw(
     if (
         !currentBeadsSessionID
     ) {
-
-        console.warn(
-            "Supabase: no active Beads session."
-        );
-
 
         setDBStatus(
             "无有效Session，仅本地保存",
@@ -565,7 +532,7 @@ async function uploadBeadsDraw(
 
         try {
 
-            var result =
+            var response =
                 await supabaseClient
                     .from(
                         "beads_draws"
@@ -575,12 +542,12 @@ async function uploadBeadsDraw(
                     );
 
 
-            /*
-                上传成功
-            */
+            /* ==============================
+               正常上传成功
+            ============================== */
 
             if (
-                !result.error
+                !response.error
             ) {
 
                 console.log(
@@ -588,6 +555,24 @@ async function uploadBeadsDraw(
                     drawData.trial,
                     drawData.bead_index
                 );
+
+
+                /*
+                    告诉 backup.js：
+                    这颗已经安全同步。
+                */
+
+                if (
+                    typeof markBeadsDrawSynced ===
+                    "function"
+                ) {
+
+                    markBeadsDrawSynced(
+                        drawData.trial,
+                        drawData.bead_index
+                    );
+
+                }
 
 
                 setDBStatus(
@@ -601,26 +586,38 @@ async function uploadBeadsDraw(
             }
 
 
-            /*
-                23505：
-                唯一约束冲突。
+            /* ==============================
+               23505 = 已经存在
 
-                通常说明第一次其实已经写入成功，
-                retry 又上传了一次。
+               例如：
+               恢复实验后重新上传旧珠子。
 
-                当作成功处理。
-            */
+               视为已经安全保存。
+            ============================== */
 
             if (
-                result.error.code ===
-                    "23505"
+                response.error.code ===
+                "23505"
             ) {
 
                 console.log(
-                    "Supabase: draw already saved:",
+                    "Supabase: draw already exists:",
                     drawData.trial,
                     drawData.bead_index
                 );
+
+
+                if (
+                    typeof markBeadsDrawSynced ===
+                    "function"
+                ) {
+
+                    markBeadsDrawSynced(
+                        drawData.trial,
+                        drawData.bead_index
+                    );
+
+                }
 
 
                 setDBStatus(
@@ -638,7 +635,7 @@ async function uploadBeadsDraw(
                 "Supabase: draw upload attempt " +
                 attempt +
                 " failed:",
-                result.error
+                response.error
             );
 
         }
@@ -669,14 +666,14 @@ async function uploadBeadsDraw(
 
 
     console.warn(
-        "Supabase: failed to upload draw. " +
-        "Local CSV remains available:",
+        "Supabase: draw upload failed. " +
+        "Local backup retained:",
         drawData
     );
 
 
     setDBStatus(
-        "部分上传失败，本地数据仍保留",
+        "部分上传失败，本地数据已保留",
         "error"
     );
 
@@ -739,7 +736,7 @@ async function completeBeadsTrial(
 
         try {
 
-            var result =
+            var response =
                 await supabaseClient
                     .rpc(
                         "complete_beads_trial",
@@ -780,13 +777,29 @@ async function completeBeadsTrial(
 
 
             if (
-                !result.error
+                !response.error
             ) {
 
                 console.log(
                     "Supabase: trial completed:",
                     resultData.trial
                 );
+
+
+                /*
+                    Final 数据已经同步
+                */
+
+                if (
+                    typeof markBeadsFinalSynced ===
+                    "function"
+                ) {
+
+                    markBeadsFinalSynced(
+                        resultData.trial
+                    );
+
+                }
 
 
                 setDBStatus(
@@ -804,7 +817,7 @@ async function completeBeadsTrial(
                 "Supabase: trial completion attempt " +
                 attempt +
                 " failed:",
-                result.error
+                response.error
             );
 
         }
@@ -835,7 +848,7 @@ async function completeBeadsTrial(
 
 
     setDBStatus(
-        "部分上传失败，本地数据仍保留",
+        "部分上传失败，本地数据已保留",
         "error"
     );
 
@@ -851,16 +864,12 @@ async function completeBeadsTrial(
 
 async function completeBeadsSession() {
 
-    /*
-        数据库失败不影响实验结束
-    */
-
     if (
         !supabaseClient
     ) {
 
         setDBStatus(
-            "未连接，请保存本地CSV",
+            "未连接，本地数据已保留",
             "error"
         );
 
@@ -883,7 +892,7 @@ async function completeBeadsSession() {
         ) {
 
             setDBStatus(
-                "未同步，请保存本地CSV",
+                "未同步，本地数据已保留",
                 "error"
             );
 
@@ -912,7 +921,7 @@ async function completeBeadsSession() {
 
         try {
 
-            var result =
+            var response =
                 await supabaseClient
                     .rpc(
                         "complete_beads_session",
@@ -926,7 +935,7 @@ async function completeBeadsSession() {
 
 
             if (
-                !result.error
+                !response.error
             ) {
 
                 console.log(
@@ -950,7 +959,7 @@ async function completeBeadsSession() {
                 "Supabase: session completion attempt " +
                 attempt +
                 " failed:",
-                result.error
+                response.error
             );
 
         }
@@ -986,7 +995,7 @@ async function completeBeadsSession() {
 
 
     setDBStatus(
-        "同步未完成，请保存本地CSV",
+        "同步未完成，本地数据已保留",
         "error"
     );
 

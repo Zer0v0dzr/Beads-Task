@@ -66,18 +66,108 @@ var idTrial = {
             });
 
 
-            /*
-                创建数据库 session。
+            /* =================================================
+               检查是否存在本地未完成记录
+            ================================================= */
 
-                不阻塞实验界面。
+            var oldCheckpoint =
+                getBeadsCheckpoint(
+                    subjectId
+                );
 
-                后面的上传函数会自动等待
-                session 创建完成。
-            */
+
+            var useOld =
+                false;
+
+
+            if (
+                oldCheckpoint &&
+                oldCheckpoint.experiment_completed !== true &&
+                (
+                    oldCheckpoint.draws.length > 0 ||
+                    oldCheckpoint.finals.length > 0
+                )
+            ) {
+
+                useOld =
+                    window.confirm(
+                        "检测到该被试存在未完成的任务记录。\n\n" +
+                        "点击“确定”：继续上次任务\n" +
+                        "点击“取消”：从头重新开始"
+                    );
+
+            }
+
+
+            /* =================================================
+               继续上次任务
+            ================================================= */
+
+            if (
+                useOld
+            ) {
+
+                activateBeadsCheckpoint(
+                    oldCheckpoint
+                );
+
+
+                /*
+                    把之前已经完成的数据重新写回 jsPsych，
+                    这样最后生成 CSV 时仍是完整数据。
+                */
+
+                restoreBeadsDataToJsPsych(
+                    jsPsych
+                );
+
+
+                /*
+                    继续使用原来的 session_id。
+                    数据库连不上也不会阻止实验继续。
+                */
+
+                beadsSessionReadyPromise =
+                    createBeadsSession(
+                        subjectId,
+                        oldCheckpoint.session_id
+                    );
+
+
+                return;
+
+            }
+
+
+            /* =================================================
+               从头开始
+            ================================================= */
+
+            if (
+                oldCheckpoint
+            ) {
+
+                clearBeadsCheckpoint(
+                    subjectId
+                );
+
+            }
+
+
+            var newSessionID =
+                generateSessionID();
+
+
+            createNewBeadsCheckpoint(
+                subjectId,
+                newSessionID
+            );
+
 
             beadsSessionReadyPromise =
                 createBeadsSession(
-                    subjectId
+                    subjectId,
+                    newSessionID
                 );
 
         }
@@ -700,6 +790,112 @@ function buildTrialTimeline(
 
 
     /*
+        断点续做状态
+    */
+
+    var trialStateInitialized =
+        false;
+
+
+    var resumedElapsedMs =
+        0;
+
+
+    function initializeTrialFromBackup() {
+
+        if (
+            trialStateInitialized
+        ) {
+
+            return;
+
+        }
+
+
+        trialStateInitialized =
+            true;
+
+
+        var saved =
+            getBeadsTrialBackup(
+                trial.trialNum
+            );
+
+
+        if (
+            !saved
+        ) {
+
+            return;
+
+        }
+
+
+        drawnSeq =
+            saved.drawnSeq.slice();
+
+
+        lastRoundQ2Value =
+            saved.lastProbability;
+
+
+        resumedElapsedMs =
+            saved.elapsedMs;
+
+
+        /*
+            如果最后一颗完整珠子已经选择了“猜罐子”，
+            说明 Q3 已经结束，只差 Final Decision。
+
+            此时：
+            - 不应再抽下一颗珠子
+            - currentBeadIdx 要保持为最后一颗的零基索引
+        */
+
+        var lastSavedDraw =
+            saved.draws.length > 0
+                ?
+                saved.draws[
+                    saved.draws.length - 1
+                ]
+                :
+                null;
+
+
+        if (
+            lastSavedDraw &&
+            lastSavedDraw.q3_sufficient ===
+                "sufficient" &&
+            !saved.completed
+        ) {
+
+            trialFinished =
+                true;
+
+
+            currentBeadIdx =
+                Math.max(
+                    0,
+                    saved.draws.length - 1
+                );
+
+        }
+        else {
+
+            /*
+                正常中断：
+                从最后一颗完整珠子的下一颗继续。
+            */
+
+            currentBeadIdx =
+                saved.nextBeadIndex;
+
+        }
+
+    }
+
+
+    /*
         当前 bead 的数据暂存
 
         Q1 → Q2 → Q3 完成后
@@ -741,6 +937,15 @@ function buildTrialTimeline(
 
         type:
             jsPsychHtmlButtonResponse,
+
+
+        on_start:
+            function() {
+
+                initializeTrialFromBackup();
+
+            },
+
 
         stimulus:
             function() {
@@ -798,9 +1003,7 @@ function buildTrialTimeline(
     timeline.push(
         trialStart
     );
-
-
-    /* =====================================================
+        /* =====================================================
        Q1
     ===================================================== */
 
@@ -816,8 +1019,8 @@ function buildTrialTimeline(
                 function() {
 
                     if (
-                        currentBeadIdx ===
-                        0
+                        firstBeadStartTime ===
+                        null
                     ) {
 
                         firstBeadStartTime =
@@ -961,10 +1164,6 @@ function buildTrialTimeline(
                     data.q1_rt =
                         data.rt;
 
-
-                    /*
-                        开始建立这一颗珠子的最终数据行
-                    */
 
                     currentDraw = {
 
@@ -1383,7 +1582,8 @@ function buildTrialTimeline(
                         data.q3_sufficient =
                             "insufficient";
 
-                    } else {
+                    }
+                    else {
 
                         data.q3_sufficient =
                             "sufficient";
@@ -1393,10 +1593,6 @@ function buildTrialTimeline(
 
                     }
 
-
-                    /*
-                        完成这一颗珠子的数据
-                    */
 
                     if (
                         currentDraw
@@ -1410,16 +1606,42 @@ function buildTrialTimeline(
                             data.q3_rt;
 
 
-                        /*
-                            深拷贝，防止后续变量变化
-                        */
-
                         var drawToUpload =
                             Object.assign(
                                 {},
                                 currentDraw
                             );
 
+
+                        /*
+                            先写入 localStorage checkpoint。
+                        */
+
+                        var currentElapsedMs =
+                            resumedElapsedMs;
+
+
+                        if (
+                            firstBeadStartTime !==
+                            null
+                        ) {
+
+                            currentElapsedMs +=
+                                performance.now() -
+                                firstBeadStartTime;
+
+                        }
+
+
+                        saveBeadsDrawCheckpoint(
+                            drawToUpload,
+                            currentElapsedMs
+                        );
+
+
+                        /*
+                            再尝试上传 Supabase。
+                        */
 
                         lastDrawUploadPromise =
                             uploadBeadsDraw(
@@ -1435,9 +1657,11 @@ function buildTrialTimeline(
 
 
                     /*
-                        注意：
+                        只有选择“查看下一颗”才 +1。
 
-                        currentBeadIdx 必须在数据上传结构生成之后再 +1
+                        如果选择“猜罐子”，
+                        currentBeadIdx 保留在当前最后一颗，
+                        Final Decision 的 DTD 才正确。
                     */
 
                     if (
@@ -1471,6 +1695,24 @@ function buildTrialTimeline(
             makeSufficiencyTrial()
 
         ],
+
+
+        /*
+            如果恢复点恰好是：
+            Q3 已选择“猜罐子”，但 Final 还没完成，
+
+            则直接跳过 Q1/Q2/Q3，
+            进入 Final Decision。
+        */
+
+        conditional_function:
+            function() {
+
+                initializeTrialFromBackup();
+
+                return !trialFinished;
+
+            },
 
 
         loop_function:
@@ -1684,24 +1926,72 @@ function buildTrialTimeline(
                     lastRoundQ2Value;
 
 
+                /*
+                    FRT =
+                    闪退前累计有效时间
+                    +
+                    本次恢复后的有效时间
+
+                    中间离线的时间不算。
+                */
+
                 data.frt_ms =
-                    firstBeadStartTime !==
-                    null
-                        ?
-                        Math.round(
-                            performance.now() -
-                            firstBeadStartTime
+                    Math.round(
+                        resumedElapsedMs +
+                        (
+                            firstBeadStartTime !==
+                            null
+                                ?
+                                performance.now() -
+                                firstBeadStartTime
+                                :
+                                0
                         )
-                        :
-                        null;
+                    );
 
 
                 /*
-                    先等待最后一颗 bead 的 INSERT 完成，
+                    Final Decision 先本地保存。
+                */
 
-                    再执行 RPC UPDATE，
+                saveBeadsFinalCheckpoint({
 
-                    避免 UPDATE 比 INSERT 先到数据库。
+                    trial:
+                        trial.trialNum,
+
+                    ratio:
+                        trial.ratio,
+
+                    bead_index:
+                        dtdVal,
+
+                    dtd:
+                        data.dtd,
+
+                    final_jar:
+                        data.final_jar,
+
+                    correct_jar:
+                        data.correct_jar,
+
+                    is_correct:
+                        data.is_correct,
+
+                    is_JTC_bias:
+                        data.is_JTC_bias,
+
+                    dt:
+                        data.dt,
+
+                    frt_ms:
+                        data.frt_ms
+
+                });
+
+
+                /*
+                    等最后一颗 bead INSERT 完成后，
+                    再补 Final / DTD / JTC 等结果。
                 */
 
                 var trialCompletionPromise =
@@ -1764,8 +2054,6 @@ function buildTrialTimeline(
     return timeline;
 
 }
-
-
 /* =========================================================
    CSV
 ========================================================= */
@@ -2158,6 +2446,10 @@ function buildCleanCSV() {
 }
 
 
+/* =========================================================
+   下载 CSV
+========================================================= */
+
 function downloadCleanCSV() {
 
     var csv =
@@ -2253,7 +2545,15 @@ async function finalizeBeadsDatabase() {
 
 
     /*
-        等待所有：
+        行为任务已经完成。
+        先在本地 checkpoint 中标记。
+    */
+
+    markBeadsExperimentCompletedLocal();
+
+
+    /*
+        等待本轮所有数据库操作：
 
         draw INSERT
         +
@@ -2265,7 +2565,63 @@ async function finalizeBeadsDatabase() {
     );
 
 
-    await completeBeadsSession();
+    /*
+        尝试标记整个 Supabase session 完成。
+    */
+
+    var sessionCompleted =
+        await completeBeadsSession();
+
+
+    /*
+        只有当：
+
+        1. session 完成成功
+        2. 所有 draw 已同步
+        3. 所有 final 已同步
+
+        才删除本地 checkpoint。
+
+        否则继续保留本地数据作为兜底。
+    */
+
+    if (
+        sessionCompleted &&
+        allBeadsCheckpointSynced()
+    ) {
+
+        console.log(
+            "All Beads data safely synchronized. " +
+            "Local checkpoint cleared."
+        );
+
+
+        clearBeadsCheckpoint(
+            subjectId
+        );
+
+    }
+    else {
+
+        console.warn(
+            "Some Beads data may not be synchronized. " +
+            "Local checkpoint retained."
+        );
+
+
+        if (
+            typeof setDBStatus ===
+            "function"
+        ) {
+
+            setDBStatus(
+                "部分数据保留在本地",
+                "error"
+            );
+
+        }
+
+    }
 
 }
 
@@ -2345,7 +2701,7 @@ var resultTrial = {
 
             html +=
                 "<p style='text-align:center; font-size:16px;'>" +
-                "点击下方按钮下载完整数据（CSV）" +
+                "如果浏览器支持，可点击下方按钮下载完整数据（CSV）。" +
                 "</p>";
 
 
@@ -2579,15 +2935,33 @@ var timeline = [
 ];
 
 
+/*
+    每个 trial 外面包一层 conditional。
+
+    如果该 trial 在 checkpoint 中已经有 Final Decision，
+    恢复时直接跳过，不再重做。
+*/
+
 trials.forEach(
     function(t) {
 
-        timeline =
-            timeline.concat(
+        timeline.push({
+
+            timeline:
                 buildTrialTimeline(
                     t
-                )
-            );
+                ),
+
+            conditional_function:
+                function() {
+
+                    return !isBeadsTrialCompleted(
+                        t.trialNum
+                    );
+
+                }
+
+        });
 
     }
 );
