@@ -290,6 +290,9 @@ async function createBeadsSession(
                         subject:
                             subjectID
 
+                        task_version:
+                           TASK_VERSION
+
                     });
 
 
