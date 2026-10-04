@@ -288,7 +288,7 @@ async function createBeadsSession(
                             currentBeadsSessionID,
 
                         subject:
-                            subjectID
+                            subjectID,
 
                         task_version:
                            TASK_VERSION
