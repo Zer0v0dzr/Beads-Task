@@ -1,18 +1,26 @@
 <!DOCTYPE html>
+
 <html lang="zh-CN">
 
 <head>
-    <meta charset="UTF-8" />
+
+    <meta charset="UTF-8">
 
     <meta
         name="viewport"
         content="width=device-width, initial-scale=1.0, user-scalable=no"
-    />
+    >
 
-    <title>珠子任务 JTC</title>
+    <title>
+        珠子任务 JTC
+    </title>
+
 
     <!-- jsPsych -->
-    <script src="https://unpkg.com/jspsych@7.3.4"></script>
+
+    <script
+        src="https://unpkg.com/jspsych@7.3.4">
+    </script>
 
     <script
         src="https://unpkg.com/@jspsych/plugin-html-button-response@1.1.2">
@@ -26,32 +34,256 @@
         src="https://unpkg.com/@jspsych/plugin-survey-text@1.1.2">
     </script>
 
+
     <!-- Chart.js -->
+
     <script
         src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
     </script>
 
+
     <!-- jsPsych CSS -->
+
     <link
         href="https://unpkg.com/jspsych@7.3.4/css/jspsych.css"
         rel="stylesheet"
         type="text/css"
-    />
+    >
 
-    <!-- 本地 CSS -->
+
+    <!-- Local CSS -->
+
     <link
         href="style.css"
         rel="stylesheet"
         type="text/css"
-    />
+    >
+
 </head>
+
 
 <body>
 
+
+    <!-- 数据库连接状态 -->
+
+    <div
+        id="db-status"
+        style="
+            position: fixed;
+            top: 8px;
+            right: 8px;
+            z-index: 99999;
+
+            padding: 6px 10px;
+
+            border-radius: 6px;
+
+            background: #eeeeee;
+            color: #333333;
+
+            font-size: 12px;
+
+            font-family:
+                -apple-system,
+                BlinkMacSystemFont,
+                'PingFang SC',
+                'Microsoft YaHei',
+                sans-serif;
+
+            opacity: 0.9;
+        "
+    >
+        数据库：正在检查...
+    </div>
+
+
     <div id="jspsych-target"></div>
 
-    <!-- 实验程序 -->
-    <script src="experiment.js"></script>
+
+    <!-- =====================================================
+         Supabase + 实验加载
+    ====================================================== -->
+
+    <script>
+
+        /*
+            按顺序动态加载 JS。
+
+            Supabase：
+            1. 先尝试 jsDelivr
+            2. 失败后尝试 unpkg
+            3. 两个都失败也继续实验
+        */
+
+
+        function loadScript(src) {
+
+            return new Promise(
+                function(resolve, reject) {
+
+                    var script =
+                        document.createElement(
+                            "script"
+                        );
+
+
+                    script.src =
+                        src;
+
+
+                    script.onload =
+                        function() {
+
+                            resolve(true);
+
+                        };
+
+
+                    script.onerror =
+                        function() {
+
+                            script.remove();
+
+                            reject(
+                                new Error(
+                                    "Failed to load: " +
+                                    src
+                                )
+                            );
+
+                        };
+
+
+                    document.body.appendChild(
+                        script
+                    );
+
+                }
+            );
+
+        }
+
+
+        async function loadExperiment() {
+
+            var supabaseLoaded =
+                false;
+
+
+            /* ---------------------------------------------
+               Supabase 主 CDN
+            --------------------------------------------- */
+
+            try {
+
+                await loadScript(
+                    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
+                );
+
+
+                if (
+                    typeof window.supabase !==
+                    "undefined"
+                ) {
+
+                    supabaseLoaded =
+                        true;
+
+                }
+
+            }
+            catch (error) {
+
+                console.warn(
+                    "jsDelivr Supabase SDK load failed.",
+                    error
+                );
+
+            }
+
+
+            /* ---------------------------------------------
+               Supabase 备用 CDN
+            --------------------------------------------- */
+
+            if (
+                !supabaseLoaded
+            ) {
+
+                try {
+
+                    await loadScript(
+                        "https://unpkg.com/@supabase/supabase-js@2"
+                    );
+
+
+                    if (
+                        typeof window.supabase !==
+                        "undefined"
+                    ) {
+
+                        supabaseLoaded =
+                            true;
+
+                    }
+
+                }
+                catch (error) {
+
+                    console.warn(
+                        "unpkg Supabase SDK load failed.",
+                        error
+                    );
+
+                }
+
+            }
+
+
+            /*
+                无论 Supabase 有没有加载成功，
+                都继续运行本地实验。
+
+                supabase.js 自己会判断状态。
+            */
+
+
+            await loadScript(
+                "config.js"
+            );
+
+
+            await loadScript(
+                "supabase.js"
+            );
+
+
+            await loadScript(
+                "experiment.js"
+            );
+
+        }
+
+
+        loadExperiment()
+            .catch(
+                function(error) {
+
+                    console.error(
+                        "Experiment loading error:",
+                        error
+                    );
+
+                    alert(
+                        "实验程序加载失败，请刷新页面后重试。"
+                    );
+
+                }
+            );
+
+    </script>
+
 
 </body>
 

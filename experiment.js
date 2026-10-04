@@ -1,12 +1,24 @@
-var jsPsych = initJsPsych({
-    on_finish: function() {
-        // 不显示 jsPsych 原始日志
-    }
-});
+var jsPsych =
+    initJsPsych({
+
+        on_finish:
+            function() {
+                // 不显示 jsPsych 原始日志
+            }
+
+    });
 
 
 var subjectId = "";
+
 var currentQ3StartTime = null;
+
+
+/*
+    所有尚未完成的数据库操作
+*/
+
+var pendingDatabaseOperations = [];
 
 
 /* =========================================================
@@ -15,31 +27,60 @@ var currentQ3StartTime = null;
 
 var idTrial = {
 
-    type: jsPsychSurveyText,
+    type:
+        jsPsychSurveyText,
 
     questions: [
         {
-            prompt: "请输入被试 ID（请询问主试）：",
-            name: "subject_id",
-            required: true
+
+            prompt:
+                "请输入被试 ID（请询问主试）：",
+
+            name:
+                "subject_id",
+
+            required:
+                true
+
         }
     ],
 
-    button_label: "开始实验",
-
-    on_finish: function(data) {
-
-        subjectId =
-            String(
-                data.response.subject_id
-            ).trim();
+    button_label:
+        "开始实验",
 
 
-        jsPsych.data.addProperties({
-            subject_id: subjectId
-        });
+    on_finish:
+        function(data) {
 
-    }
+            subjectId =
+                String(
+                    data.response.subject_id
+                ).trim();
+
+
+            jsPsych.data.addProperties({
+
+                subject_id:
+                    subjectId
+
+            });
+
+
+            /*
+                创建数据库 session。
+
+                不阻塞实验界面。
+
+                后面的上传函数会自动等待
+                session 创建完成。
+            */
+
+            beadsSessionReadyPromise =
+                createBeadsSession(
+                    subjectId
+                );
+
+        }
 
 };
 
@@ -51,6 +92,7 @@ var idTrial = {
 var trials = [
 
     {
+
         trialNum: 1,
 
         ratio: "80:20",
@@ -76,11 +118,14 @@ var trials = [
             otherPct: 20
         },
 
-        correct: "A"
+        correct:
+            "A"
+
     },
 
 
     {
+
         trialNum: 2,
 
         ratio: "80:20",
@@ -106,11 +151,14 @@ var trials = [
             otherPct: 20
         },
 
-        correct: "B"
+        correct:
+            "B"
+
     },
 
 
     {
+
         trialNum: 3,
 
         ratio: "60:40",
@@ -136,11 +184,14 @@ var trials = [
             otherPct: 40
         },
 
-        correct: "A"
+        correct:
+            "A"
+
     },
 
 
     {
+
         trialNum: 4,
 
         ratio: "60:40",
@@ -166,70 +217,118 @@ var trials = [
             otherPct: 40
         },
 
-        correct: "B"
+        correct:
+            "B"
+
     }
 
 ];
 
 
 var beadColorMap = {
-    "Y": "bead-yellow",
-    "B": "bead-blue"
+
+    "Y":
+        "bead-yellow",
+
+    "B":
+        "bead-blue"
+
 };
 
 
 var beadNameMap = {
-    "Y": "黄色",
-    "B": "蓝色"
+
+    "Y":
+        "黄色",
+
+    "B":
+        "蓝色"
+
 };
 
 
 /* =========================================================
-   珠子显示
+   显示工具
 ========================================================= */
 
-function getTextColorClass(colorCode) {
+function getTextColorClass(
+    colorCode
+) {
 
-    if (colorCode === "Y") {
-        return "text-yellow";
-    }
-
-    return "text-blue";
+    return (
+        colorCode === "Y"
+            ?
+            "text-yellow"
+            :
+            "text-blue"
+    );
 
 }
 
 
-function generateBeads(jar) {
+/*
+    使用最初版：
 
-    var total = 50;
+    jar = 170 × 210
+    bead = 16 × 16
+*/
+
+function generateBeads(
+    jar
+) {
+
+    var total =
+        50;
+
 
     var mainCount =
         Math.round(
-            jar.mainPct / 100 * total
+            jar.mainPct /
+            100 *
+            total
         );
 
+
     var otherCount =
-        total - mainCount;
+        total -
+        mainCount;
 
 
-    var beadSize = 16;
-    var gap = 1;
+    var beadSize =
+        16;
+
+
+    var gap =
+        1;
+
 
     var step =
-        beadSize + gap;
+        beadSize +
+        gap;
 
 
-    var leftBound = 4;
+    var leftBound =
+        4;
+
 
     var rightBound =
-        170 - beadSize - 4;
+        170 -
+        beadSize -
+        4;
+
 
     var bottomBound =
-        210 - beadSize - 4;
+        210 -
+        beadSize -
+        4;
 
 
-    var beads = [];
-    var colorPool = [];
+    var beads =
+        [];
+
+
+    var colorPool =
+        [];
 
 
     for (
@@ -267,6 +366,7 @@ function generateBeads(jar) {
     var x =
         leftBound;
 
+
     var y =
         bottomBound;
 
@@ -296,11 +396,13 @@ function generateBeads(jar) {
     }
 
 
-    var rowOffset = 0;
+    var rowOffset =
+        0;
 
 
     while (
-        colorPool.length > 0
+        colorPool.length >
+        0
     ) {
 
         y -=
@@ -318,8 +420,10 @@ function generateBeads(jar) {
 
         rowOffset =
             rowOffset === 0
-                ? step / 2
-                : 0;
+                ?
+                step / 2
+                :
+                0;
 
 
         x =
@@ -389,9 +493,12 @@ function generateBeads(jar) {
 }
 
 
-function renderBeadsHtml(beadsArr) {
+function renderBeadsHtml(
+    beadsArr
+) {
 
-    var html = "";
+    var html =
+        "";
 
 
     beadsArr.forEach(
@@ -451,13 +558,15 @@ function renderJarFixed(
             <div class="jar-ratio">
 
                 <span class="${clsMain}">
-                    ${jarObj.mainPct}% ${beadNameMap[jarObj.main]}珠子
+                    ${jarObj.mainPct}%
+                    ${beadNameMap[jarObj.main]}珠子
                 </span>
 
                 <br>
 
                 <span class="${clsOther}">
-                    ${jarObj.otherPct}% ${beadNameMap[jarObj.other]}珠子
+                    ${jarObj.otherPct}%
+                    ${beadNameMap[jarObj.other]}珠子
                 </span>
 
             </div>
@@ -468,7 +577,9 @@ function renderJarFixed(
 }
 
 
-function renderSequence(seq) {
+function renderSequence(
+    seq
+) {
 
     return seq
         .map(
@@ -560,21 +671,54 @@ var instructions = {
    Trial
 ========================================================= */
 
-function buildTrialTimeline(trial) {
+function buildTrialTimeline(
+    trial
+) {
 
-    var timeline = [];
+    var timeline =
+        [];
 
-    var drawnSeq = [];
 
-    var currentBeadIdx = 0;
+    var drawnSeq =
+        [];
 
-    var trialFinished = false;
+
+    var currentBeadIdx =
+        0;
+
+
+    var trialFinished =
+        false;
+
 
     var firstBeadStartTime =
         null;
 
+
     var lastRoundQ2Value =
         null;
+
+
+    /*
+        当前 bead 的数据暂存
+
+        Q1 → Q2 → Q3 完成后
+        合成一行上传数据库。
+    */
+
+    var currentDraw =
+        null;
+
+
+    /*
+        当前 trial 最后一颗珠子的上传 Promise。
+
+        Final Decision 必须等它 INSERT 成功后，
+        再执行 RPC UPDATE。
+    */
+
+    var lastDrawUploadPromise =
+        Promise.resolve(true);
 
 
     const jarABeads =
@@ -608,12 +752,10 @@ function buildTrialTimeline(trial) {
                         ${trial.trialNum} / 4
                     </div>
 
-
                     <h2 style="text-align:center;">
                         第 ${trial.trialNum} 试次
                         （比例 ${trial.ratio}）
                     </h2>
-
 
                     <div class="jar-container">
 
@@ -630,7 +772,6 @@ function buildTrialTimeline(trial) {
                         )}
 
                     </div>
-
 
                     <p
                         style="
@@ -670,11 +811,13 @@ function buildTrialTimeline(trial) {
             type:
                 jsPsychHtmlButtonResponse,
 
+
             stimulus:
                 function() {
 
                     if (
-                        currentBeadIdx === 0
+                        currentBeadIdx ===
+                        0
                     ) {
 
                         firstBeadStartTime =
@@ -707,11 +850,9 @@ function buildTrialTimeline(trial) {
                             ${trial.trialNum} / 4
                         </div>
 
-
                         <div class="current-bead-title">
                             珠子${beadIndex}
                         </div>
-
 
                         <div class="current-bead-area">
 
@@ -723,7 +864,6 @@ function buildTrialTimeline(trial) {
                             </div>
 
                         </div>
-
 
                         <div class="jar-container">
 
@@ -741,7 +881,6 @@ function buildTrialTimeline(trial) {
 
                         </div>
 
-
                         <div class="sequence-area">
 
                             <div class="sequence-label">
@@ -749,11 +888,12 @@ function buildTrialTimeline(trial) {
                             </div>
 
                             <div class="sequence-beads">
-                                ${renderSequence(drawnSeq)}
+                                ${renderSequence(
+                                    drawnSeq
+                                )}
                             </div>
 
                         </div>
-
 
                         <p class="question-text">
                             问题 1：
@@ -786,7 +926,8 @@ function buildTrialTimeline(trial) {
                             trial.ratio,
 
                         bead_index:
-                            currentBeadIdx + 1,
+                            currentBeadIdx +
+                            1,
 
                         bead_color:
                             trial.seq[
@@ -798,7 +939,8 @@ function buildTrialTimeline(trial) {
                             "Q1_jar",
 
                         trialTimestamp:
-                            new Date().toISOString()
+                            new Date()
+                                .toISOString()
 
                     };
 
@@ -810,12 +952,59 @@ function buildTrialTimeline(trial) {
 
                     data.q1_response =
                         data.response === 0
-                            ? "A"
-                            : "B";
+                            ?
+                            "A"
+                            :
+                            "B";
 
 
                     data.q1_rt =
                         data.rt;
+
+
+                    /*
+                        开始建立这一颗珠子的最终数据行
+                    */
+
+                    currentDraw = {
+
+                        subject:
+                            subjectId,
+
+                        trial:
+                            data.trial,
+
+                        ratio:
+                            data.ratio,
+
+                        bead_index:
+                            data.bead_index,
+
+                        bead_color:
+                            data.bead_color,
+
+                        q1_response:
+                            data.q1_response,
+
+                        q1_rt:
+                            data.q1_rt,
+
+                        q2_probability:
+                            null,
+
+                        q2_rt:
+                            null,
+
+                        q3_sufficient:
+                            null,
+
+                        q3_rt:
+                            null,
+
+                        trialTimestamp:
+                            data.trialTimestamp
+
+                    };
 
                 }
 
@@ -834,6 +1023,7 @@ function buildTrialTimeline(trial) {
 
             type:
                 jsPsychHtmlSliderResponse,
+
 
             stimulus:
                 function() {
@@ -857,11 +1047,9 @@ function buildTrialTimeline(trial) {
                             ${trial.trialNum} / 4
                         </div>
 
-
                         <div class="current-bead-title">
                             珠子${beadIndex}
                         </div>
-
 
                         <div class="current-bead-area">
 
@@ -873,7 +1061,6 @@ function buildTrialTimeline(trial) {
                             </div>
 
                         </div>
-
 
                         <div class="jar-container">
 
@@ -891,7 +1078,6 @@ function buildTrialTimeline(trial) {
 
                         </div>
 
-
                         <div class="sequence-area">
 
                             <div class="sequence-label">
@@ -899,17 +1085,17 @@ function buildTrialTimeline(trial) {
                             </div>
 
                             <div class="sequence-beads">
-                                ${renderSequence(drawnSeq)}
+                                ${renderSequence(
+                                    drawnSeq
+                                )}
                             </div>
 
                         </div>
-
 
                         <p class="question-text">
                             问题 2：
                             你估计珠子来自你选择的那个罐子的概率是多少？
                         </p>
-
 
                         <p class="question-hint">
                             0% = 完全不确定，
@@ -966,7 +1152,8 @@ function buildTrialTimeline(trial) {
                             trial.ratio,
 
                         bead_index:
-                            currentBeadIdx + 1,
+                            currentBeadIdx +
+                            1,
 
                         bead_color:
                             trial.seq[
@@ -996,6 +1183,20 @@ function buildTrialTimeline(trial) {
                     lastRoundQ2Value =
                         data.response;
 
+
+                    if (
+                        currentDraw
+                    ) {
+
+                        currentDraw.q2_probability =
+                            data.q2_probability;
+
+
+                        currentDraw.q2_rt =
+                            data.q2_rt;
+
+                    }
+
                 }
 
         };
@@ -1013,6 +1214,7 @@ function buildTrialTimeline(trial) {
 
             type:
                 jsPsychHtmlButtonResponse,
+
 
             stimulus:
                 function() {
@@ -1036,11 +1238,9 @@ function buildTrialTimeline(trial) {
                             ${trial.trialNum} / 4
                         </div>
 
-
                         <div class="current-bead-title">
                             珠子${beadIndex}
                         </div>
-
 
                         <div class="current-bead-area">
 
@@ -1052,7 +1252,6 @@ function buildTrialTimeline(trial) {
                             </div>
 
                         </div>
-
 
                         <div class="jar-container">
 
@@ -1070,7 +1269,6 @@ function buildTrialTimeline(trial) {
 
                         </div>
 
-
                         <div class="sequence-area">
 
                             <div class="sequence-label">
@@ -1078,17 +1276,17 @@ function buildTrialTimeline(trial) {
                             </div>
 
                             <div class="sequence-beads">
-                                ${renderSequence(drawnSeq)}
+                                ${renderSequence(
+                                    drawnSeq
+                                )}
                             </div>
 
                         </div>
-
 
                         <p class="question-text">
                             问题 3：
                             当前信息是否已经足够做出确定的罐子归属判断？
                         </p>
-
 
                         <div class="bottom-buttons">
 
@@ -1106,7 +1304,6 @@ function buildTrialTimeline(trial) {
                             >
                                 查看下一颗珠子
                             </button>
-
 
                             <button
                                 onclick="
@@ -1145,7 +1342,8 @@ function buildTrialTimeline(trial) {
                             trial.ratio,
 
                         bead_index:
-                            currentBeadIdx + 1,
+                            currentBeadIdx +
+                            1,
 
                         bead_color:
                             trial.seq[
@@ -1178,31 +1376,76 @@ function buildTrialTimeline(trial) {
 
 
                     if (
-                        data.response === 0
+                        data.response ===
+                        0
                     ) {
 
                         data.q3_sufficient =
                             "insufficient";
-
-
-                        data.dtd =
-                            null;
-
-
-                        currentBeadIdx++;
 
                     } else {
 
                         data.q3_sufficient =
                             "sufficient";
 
-
-                        data.dtd =
-                            currentBeadIdx + 1;
-
-
                         trialFinished =
                             true;
+
+                    }
+
+
+                    /*
+                        完成这一颗珠子的数据
+                    */
+
+                    if (
+                        currentDraw
+                    ) {
+
+                        currentDraw.q3_sufficient =
+                            data.q3_sufficient;
+
+
+                        currentDraw.q3_rt =
+                            data.q3_rt;
+
+
+                        /*
+                            深拷贝，防止后续变量变化
+                        */
+
+                        var drawToUpload =
+                            Object.assign(
+                                {},
+                                currentDraw
+                            );
+
+
+                        lastDrawUploadPromise =
+                            uploadBeadsDraw(
+                                drawToUpload
+                            );
+
+
+                        pendingDatabaseOperations.push(
+                            lastDrawUploadPromise
+                        );
+
+                    }
+
+
+                    /*
+                        注意：
+
+                        currentBeadIdx 必须在数据上传结构生成之后再 +1
+                    */
+
+                    if (
+                        data.response ===
+                        0
+                    ) {
+
+                        currentBeadIdx++;
 
                     }
 
@@ -1248,7 +1491,8 @@ function buildTrialTimeline(trial) {
 
                 for (
                     var i =
-                        data.values().length - 1;
+                        data.values().length -
+                        1;
 
                     i >= 0;
 
@@ -1310,6 +1554,7 @@ function buildTrialTimeline(trial) {
         type:
             jsPsychHtmlButtonResponse,
 
+
         stimulus:
             function() {
 
@@ -1320,13 +1565,11 @@ function buildTrialTimeline(trial) {
                         ${trial.trialNum} / 4
                     </div>
 
-
                     <h2 style="text-align:center;">
                         第${trial.trialNum}试次
                         —
                         最终判断
                     </h2>
-
 
                     <div class="jar-container">
 
@@ -1344,7 +1587,6 @@ function buildTrialTimeline(trial) {
 
                     </div>
 
-
                     <div class="sequence-area">
 
                         <div class="sequence-label">
@@ -1352,11 +1594,12 @@ function buildTrialTimeline(trial) {
                         </div>
 
                         <div class="sequence-beads">
-                            ${renderSequence(drawnSeq)}
+                            ${renderSequence(
+                                drawnSeq
+                            )}
                         </div>
 
                     </div>
-
 
                     <p class="question-text">
                         请做出最终判断：
@@ -1401,8 +1644,10 @@ function buildTrialTimeline(trial) {
 
                 data.final_jar =
                     data.response === 0
-                        ? "A"
-                        : "B";
+                        ?
+                        "A"
+                        :
+                        "B";
 
 
                 data.correct_jar =
@@ -1412,12 +1657,15 @@ function buildTrialTimeline(trial) {
                 data.is_correct =
                     data.final_jar ===
                     trial.correct
-                        ? 1
-                        : 0;
+                        ?
+                        1
+                        :
+                        0;
 
 
                 var dtdVal =
-                    currentBeadIdx + 1;
+                    currentBeadIdx +
+                    1;
 
 
                 data.dtd =
@@ -1426,8 +1674,10 @@ function buildTrialTimeline(trial) {
 
                 data.is_JTC_bias =
                     dtdVal <= 2
-                        ? 1
-                        : 0;
+                        ?
+                        1
+                        :
+                        0;
 
 
                 data.dt =
@@ -1435,7 +1685,8 @@ function buildTrialTimeline(trial) {
 
 
                 data.frt_ms =
-                    firstBeadStartTime !== null
+                    firstBeadStartTime !==
+                    null
                         ?
                         Math.round(
                             performance.now() -
@@ -1443,6 +1694,62 @@ function buildTrialTimeline(trial) {
                         )
                         :
                         null;
+
+
+                /*
+                    先等待最后一颗 bead 的 INSERT 完成，
+
+                    再执行 RPC UPDATE，
+
+                    避免 UPDATE 比 INSERT 先到数据库。
+                */
+
+                var trialCompletionPromise =
+                    Promise
+                        .resolve(
+                            lastDrawUploadPromise
+                        )
+                        .then(
+                            function() {
+
+                                return completeBeadsTrial({
+
+                                    trial:
+                                        trial.trialNum,
+
+                                    bead_index:
+                                        dtdVal,
+
+                                    dtd:
+                                        data.dtd,
+
+                                    final_jar:
+                                        data.final_jar,
+
+                                    correct_jar:
+                                        data.correct_jar,
+
+                                    is_correct:
+                                        data.is_correct,
+
+                                    is_JTC_bias:
+                                        data.is_JTC_bias,
+
+                                    dt:
+                                        data.dt,
+
+                                    frt_ms:
+                                        data.frt_ms
+
+                                });
+
+                            }
+                        );
+
+
+                pendingDatabaseOperations.push(
+                    trialCompletionPromise
+                );
 
             }
 
@@ -1463,7 +1770,9 @@ function buildTrialTimeline(trial) {
    CSV
 ========================================================= */
 
-function csvEscape(value) {
+function csvEscape(
+    value
+) {
 
     if (
         value === null ||
@@ -1476,7 +1785,9 @@ function csvEscape(value) {
 
 
     var str =
-        String(value);
+        String(
+            value
+        );
 
 
     if (
@@ -1502,13 +1813,6 @@ function csvEscape(value) {
 }
 
 
-/*
-    将 jsPsych 的 Q1/Q2/Q3 三行
-    合并成：
-
-    一颗珠子 = 一行
-*/
-
 function buildCleanCSV() {
 
     var allData =
@@ -1518,12 +1822,14 @@ function buildCleanCSV() {
             .values();
 
 
-    var beadRows = {};
+    var beadRows =
+        {};
 
 
-    /* =====================================================
-       先合并 Q1 / Q2 / Q3
-    ===================================================== */
+    /*
+        Q1 / Q2 / Q3
+        → 合并成一颗珠子一行
+    */
 
     allData.forEach(
         function(d) {
@@ -1630,11 +1936,6 @@ function buildCleanCSV() {
                     d.q1_rt;
 
 
-                /*
-                    Q1 是这一颗珠子第一次正式呈现，
-                    因此用 Q1 时间作为该 bead 的 timestamp
-                */
-
                 row.trialTimestamp =
                     d.trialTimestamp;
 
@@ -1668,26 +1969,17 @@ function buildCleanCSV() {
                 row.q3_rt =
                     d.q3_rt;
 
-
-                if (
-                    d.dtd !== null &&
-                    d.dtd !== undefined
-                ) {
-
-                    row.dtd =
-                        d.dtd;
-
-                }
-
             }
 
         }
     );
 
 
-    /* =====================================================
-       把 Final Decision 放到最后一颗珠子
-    ===================================================== */
+    /*
+        Final Decision
+
+        只写到该 trial 最后一颗珠子
+    */
 
     var finalTrials =
         allData.filter(
@@ -1755,19 +2047,11 @@ function buildCleanCSV() {
     );
 
 
-    /* =====================================================
-       转成数组
-    ===================================================== */
-
     var rows =
         Object.values(
             beadRows
         );
 
-
-    /* =====================================================
-       按 trial → bead 排序
-    ===================================================== */
 
     rows.sort(
         function(a, b) {
@@ -1793,10 +2077,6 @@ function buildCleanCSV() {
         }
     );
 
-
-    /* =====================================================
-       CSV Headers
-    ===================================================== */
 
     var headers = [
 
@@ -1922,30 +2202,70 @@ function downloadCleanCSV() {
         "_" +
         new Date()
             .toISOString()
-            .slice(0, 10) +
+            .slice(
+                0,
+                10
+            ) +
         ".csv";
 
 
-    document
-        .body
-        .appendChild(
-            a
-        );
+    document.body.appendChild(
+        a
+    );
 
 
     a.click();
 
 
-    document
-        .body
-        .removeChild(
-            a
-        );
+    document.body.removeChild(
+        a
+    );
 
 
     URL.revokeObjectURL(
         url
     );
+
+}
+
+
+/* =========================================================
+   数据库最终完成
+========================================================= */
+
+var databaseFinalized =
+    false;
+
+
+async function finalizeBeadsDatabase() {
+
+    if (
+        databaseFinalized
+    ) {
+
+        return;
+
+    }
+
+
+    databaseFinalized =
+        true;
+
+
+    /*
+        等待所有：
+
+        draw INSERT
+        +
+        trial completion RPC
+    */
+
+    await Promise.allSettled(
+        pendingDatabaseOperations
+    );
+
+
+    await completeBeadsSession();
 
 }
 
@@ -1958,6 +2278,7 @@ var resultTrial = {
 
     type:
         jsPsychHtmlButtonResponse,
+
 
     stimulus:
         function() {
@@ -2000,8 +2321,10 @@ var resultTrial = {
                             判断=${ft.final_jar}，
                             ${
                                 ft.is_correct === 1
-                                    ? "✓正确"
-                                    : "✗错误"
+                                    ?
+                                    "✓正确"
+                                    :
+                                    "✗错误"
                             }，
                             DTD=${ft.dtd}，
                             JTC偏差=${ft.is_JTC_bias}，
@@ -2042,6 +2365,26 @@ var resultTrial = {
 
     on_load:
         function() {
+
+            /*
+                到结果页时，
+                实验已经全部完成。
+
+                开始数据库收尾。
+            */
+
+            finalizeBeadsDatabase()
+                .catch(
+                    function(error) {
+
+                        console.error(
+                            "Supabase finalization error:",
+                            error
+                        );
+
+                    }
+                );
+
 
             var allData =
                 jsPsych
