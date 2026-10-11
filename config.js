@@ -1,4 +1,4 @@
-const TASK_VERSION = "1.0";
+const TASK_VERSION = "2.0";
 
 const SUPABASE_URL =
     "https://sxvtbwtitdbaflaigahj.supabase.co";

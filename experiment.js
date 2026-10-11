@@ -310,10 +310,137 @@ var trials = [
         correct:
             "B"
 
+        },
+
+
+    {
+        trialNum: 5,
+
+        ratio: "80:20",
+
+        seq: [
+            "B","B","B","Y","B",
+            "B","B","B","Y","B",
+            "B","B","Y","B","B",
+            "B","B","Y","B","B"
+        ],
+
+        jarA: {
+            main: "Y",
+            mainPct: 80,
+            other: "B",
+            otherPct: 20
+        },
+
+        jarB: {
+            main: "B",
+            mainPct: 80,
+            other: "Y",
+            otherPct: 20
+        },
+
+        correct:
+            "B"
+
+    },
+
+
+    {
+        trialNum: 6,
+
+        ratio: "80:20",
+
+        seq: [
+            "Y","Y","Y","B","Y",
+            "Y","Y","Y","B","Y",
+            "Y","Y","B","Y","Y",
+            "Y","Y","B","Y","Y"
+        ],
+
+        jarA: {
+            main: "Y",
+            mainPct: 80,
+            other: "B",
+            otherPct: 20
+        },
+
+        jarB: {
+            main: "B",
+            mainPct: 80,
+            other: "Y",
+            otherPct: 20
+        },
+
+        correct:
+            "A"
+
+    },
+
+
+    {
+        trialNum: 7,
+
+        ratio: "60:40",
+
+        seq: [
+            "B","B","Y","B","Y",
+            "Y","B","Y","B","B",
+            "Y","B","B","Y","Y",
+            "B","Y","B","B","Y"
+        ],
+
+        jarA: {
+            main: "Y",
+            mainPct: 60,
+            other: "B",
+            otherPct: 40
+        },
+
+        jarB: {
+            main: "B",
+            mainPct: 60,
+            other: "Y",
+            otherPct: 40
+        },
+
+        correct:
+            "B"
+
+    },
+
+
+    {
+        trialNum: 8,
+
+        ratio: "60:40",
+
+        seq: [
+            "Y","Y","B","Y","B",
+            "B","Y","B","Y","Y",
+            "B","Y","Y","B","B",
+            "Y","B","Y","Y","B"
+        ],
+
+        jarA: {
+            main: "Y",
+            mainPct: 60,
+            other: "B",
+            otherPct: 40
+        },
+
+        jarB: {
+            main: "B",
+            mainPct: 60,
+            other: "Y",
+            otherPct: 40
+        },
+
+        correct:
+            "A"
+
     }
 
 ];
-
 
 var beadColorMap = {
 
@@ -742,7 +869,7 @@ var instructions = {
 
             <br><br>
 
-            本实验共有4个试次，每个试次结束后自动进入下一试次，没有时间限制。
+            本实验共有8个试次，每个试次结束后自动进入下一试次，没有时间限制。
 
         </p>
     `,
@@ -954,7 +1081,7 @@ function buildTrialTimeline(
 
                     <div class="task-header">
                         题目数：
-                        ${trial.trialNum} / 4
+                        ${trial.trialNum} / 8
                     </div>
 
                     <h2 style="text-align:center;">
@@ -1050,7 +1177,7 @@ function buildTrialTimeline(
 
                         <div class="task-header">
                             题目数：
-                            ${trial.trialNum} / 4
+                            ${trial.trialNum} / 8
                         </div>
 
                         <div class="current-bead-title">
@@ -1243,7 +1370,7 @@ function buildTrialTimeline(
 
                         <div class="task-header">
                             题目数：
-                            ${trial.trialNum} / 4
+                            ${trial.trialNum} / 8
                         </div>
 
                         <div class="current-bead-title">
@@ -1434,7 +1561,7 @@ function buildTrialTimeline(
 
                         <div class="task-header">
                             题目数：
-                            ${trial.trialNum} / 4
+                            ${trial.trialNum} / 8
                         </div>
 
                         <div class="current-bead-title">
@@ -1804,7 +1931,7 @@ function buildTrialTimeline(
 
                     <div class="task-header">
                         题目数：
-                        ${trial.trialNum} / 4
+                        ${trial.trialNum} / 8
                     </div>
 
                     <h2 style="text-align:center;">
