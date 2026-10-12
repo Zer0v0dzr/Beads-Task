@@ -13,6 +13,9 @@ var subjectId = "";
 
 var currentQ3StartTime = null;
 
+// 每个试次最多抽取 20 颗珠子。
+var MAX_BEADS_PER_TRIAL = 20;
+
 
 /*
     所有尚未完成的数据库操作
@@ -84,6 +87,7 @@ var idTrial = {
                 oldCheckpoint &&
                 oldCheckpoint.experiment_completed !== true &&
                 (
+                    Array.isArray(oldCheckpoint.trial_order) ||
                     oldCheckpoint.draws.length > 0 ||
                     oldCheckpoint.finals.length > 0
                 )
@@ -110,6 +114,8 @@ var idTrial = {
                 activateBeadsCheckpoint(
                     oldCheckpoint
                 );
+
+                prepareBeadsTrialOrder(oldCheckpoint, false);
 
 
                 /*
@@ -158,10 +164,12 @@ var idTrial = {
                 generateSessionID();
 
 
-            createNewBeadsCheckpoint(
+            var newCheckpoint = createNewBeadsCheckpoint(
                 subjectId,
                 newSessionID
             );
+
+            prepareBeadsTrialOrder(newCheckpoint, true);
 
 
             beadsSessionReadyPromise =
@@ -184,6 +192,8 @@ var trials = [
     {
 
         trialNum: 1,
+
+        condition: 1,
 
         ratio: "80:20",
 
@@ -218,6 +228,8 @@ var trials = [
 
         trialNum: 2,
 
+        condition: 2,
+
         ratio: "80:20",
 
         seq: [
@@ -250,6 +262,8 @@ var trials = [
     {
 
         trialNum: 3,
+
+        condition: 3,
 
         ratio: "60:40",
 
@@ -284,6 +298,8 @@ var trials = [
 
         trialNum: 4,
 
+        condition: 4,
+
         ratio: "60:40",
 
         seq: [
@@ -315,6 +331,8 @@ var trials = [
 
     {
         trialNum: 5,
+
+        condition: 2,
 
         ratio: "80:20",
 
@@ -348,6 +366,8 @@ var trials = [
     {
         trialNum: 6,
 
+        condition: 1,
+
         ratio: "80:20",
 
         seq: [
@@ -379,6 +399,8 @@ var trials = [
 
     {
         trialNum: 7,
+
+        condition: 4,
 
         ratio: "60:40",
 
@@ -412,6 +434,8 @@ var trials = [
     {
         trialNum: 8,
 
+        condition: 3,
+
         ratio: "60:40",
 
         seq: [
@@ -441,6 +465,54 @@ var trials = [
     }
 
 ];
+
+
+/*
+    trials 保存原始条件池；presentationTrials 的对象由 timeline 持有。
+    输入被试编号后再确定顺序，保存在同一个 checkpoint 中。
+    恢复时使用已保存顺序，旧版固定顺序记录按原顺序继续。
+*/
+var presentationTrials = trials.map(function(t) {
+    return Object.assign({}, t);
+});
+
+function prepareBeadsTrialOrder(checkpoint, isNewSession) {
+    var order = checkpoint.trial_order;
+
+    if (!order) {
+        order = trials.map(function(t) { return t.trialNum; });
+        if (isNewSession) {
+            order = jsPsych.randomization.shuffle(order);
+        }
+    }
+
+    if (!Array.isArray(order) || order.length !== trials.length ||
+        order.some(function(id) {
+            return !Number.isInteger(id) || id < 1 || id > trials.length;
+        }) || new Set(order).size !== trials.length) {
+        throw new Error("保存的试次顺序无效，无法安全恢复任务。");
+    }
+
+    order.forEach(function(originalTrialNum, index) {
+        Object.assign(presentationTrials[index], trials[originalTrialNum - 1], {
+            trialNum: index + 1
+        });
+    });
+
+    checkpoint.trial_order = order.slice();
+    checkpoint.version = 2;
+
+    // 为旧版固定顺序备份补充 condition；不改变已有试次或珠子数据。
+    checkpoint.draws.concat(checkpoint.finals).forEach(function(row) {
+        var definition = presentationTrials[Number(row.trial) - 1];
+        if (!definition) {
+            throw new Error("本地记录的试次编号无效。");
+        }
+        row.condition = definition.condition;
+    });
+
+    saveBeadsCheckpoint();
+}
 
 var beadColorMap = {
 
@@ -869,7 +941,7 @@ var instructions = {
 
             <br><br>
 
-            本实验共有8个试次，每个试次结束后自动进入下一试次，没有时间限制。
+            本实验共有8个试次，每个试次最多抽取20颗珠子，每个试次结束后自动进入下一试次，没有时间限制。
 
         </p>
     `,
@@ -928,6 +1000,16 @@ function buildTrialTimeline(
         0;
 
 
+    function beadLimitReached() {
+        return currentBeadIdx + 1 >= MAX_BEADS_PER_TRIAL;
+    }
+
+    function renderBeadLimitNotice() {
+        return beadLimitReached()
+            ? '<p role="alert" style="color:#d00000;font-size:20px;font-weight:bold;">您已达抽取上限，请尽快做出判断</p>'
+            : '';
+    }
+
     function initializeTrialFromBackup() {
 
         if (
@@ -941,6 +1023,9 @@ function buildTrialTimeline(
 
         trialStateInitialized =
             true;
+
+        jarABeads = generateBeads(trial.jarA);
+        jarBBeads = generateBeads(trial.jarB);
 
 
         var saved =
@@ -991,8 +1076,8 @@ function buildTrialTimeline(
 
         if (
             lastSavedDraw &&
-            lastSavedDraw.q3_sufficient ===
-                "sufficient" &&
+            (lastSavedDraw.q3_sufficient === "sufficient" ||
+                saved.draws.length >= MAX_BEADS_PER_TRIAL) &&
             !saved.completed
         ) {
 
@@ -1044,16 +1129,8 @@ function buildTrialTimeline(
         Promise.resolve(true);
 
 
-    const jarABeads =
-        generateBeads(
-            trial.jarA
-        );
-
-
-    const jarBBeads =
-        generateBeads(
-            trial.jarB
-        );
+    var jarABeads = null;
+    var jarBBeads = null;
 
 
     /* =====================================================
@@ -1076,6 +1153,8 @@ function buildTrialTimeline(
 
         stimulus:
             function() {
+
+                    initializeTrialFromBackup();
 
                 return `
 
@@ -1145,6 +1224,8 @@ function buildTrialTimeline(
             stimulus:
                 function() {
 
+                    initializeTrialFromBackup();
+
                     if (
                         firstBeadStartTime ===
                         null
@@ -1183,6 +1264,8 @@ function buildTrialTimeline(
                         <div class="current-bead-title">
                             珠子${beadIndex}
                         </div>
+
+                        ${renderBeadLimitNotice()}
 
                         <div class="current-bead-area">
 
@@ -1252,6 +1335,9 @@ function buildTrialTimeline(
                         trial:
                             trial.trialNum,
 
+                        condition:
+                            trial.condition,
+
                         ratio:
                             trial.ratio,
 
@@ -1299,6 +1385,9 @@ function buildTrialTimeline(
 
                         trial:
                             data.trial,
+
+                        condition:
+                            data.condition,
 
                         ratio:
                             data.ratio,
@@ -1354,6 +1443,8 @@ function buildTrialTimeline(
             stimulus:
                 function() {
 
+                    initializeTrialFromBackup();
+
                     var beadColor =
                         trial.seq[
                             currentBeadIdx %
@@ -1376,6 +1467,8 @@ function buildTrialTimeline(
                         <div class="current-bead-title">
                             珠子${beadIndex}
                         </div>
+
+                        ${renderBeadLimitNotice()}
 
                         <div class="current-bead-area">
 
@@ -1474,6 +1567,9 @@ function buildTrialTimeline(
                         trial:
                             trial.trialNum,
 
+                        condition:
+                            trial.condition,
+
                         ratio:
                             trial.ratio,
 
@@ -1545,6 +1641,8 @@ function buildTrialTimeline(
             stimulus:
                 function() {
 
+                    initializeTrialFromBackup();
+
                     var beadColor =
                         trial.seq[
                             currentBeadIdx %
@@ -1567,6 +1665,8 @@ function buildTrialTimeline(
                         <div class="current-bead-title">
                             珠子${beadIndex}
                         </div>
+
+                        ${renderBeadLimitNotice()}
 
                         <div class="current-bead-area">
 
@@ -1617,6 +1717,7 @@ function buildTrialTimeline(
                         <div class="bottom-buttons">
 
                             <button
+                                ${beadLimitReached() ? 'disabled aria-disabled="true" style="opacity:0.45;cursor:not-allowed;"' : ''}
                                 onclick="
                                     jsPsych.finishTrial({
                                         response: 0,
@@ -1663,6 +1764,9 @@ function buildTrialTimeline(
 
                         trial:
                             trial.trialNum,
+
+                        condition:
+                            trial.condition,
 
                         ratio:
                             trial.ratio,
@@ -1720,6 +1824,11 @@ function buildTrialTimeline(
 
                     }
 
+
+                    // 达到上限时强制结束抽取；不把 insufficient 改写为 sufficient。
+                    if (beadLimitReached()) {
+                        trialFinished = true;
+                    }
 
                     if (
                         currentDraw
@@ -1792,8 +1901,8 @@ function buildTrialTimeline(
                     */
 
                     if (
-                        data.response ===
-                        0
+                        data.response === 0 &&
+                        !beadLimitReached()
                     ) {
 
                         currentBeadIdx++;
@@ -1927,6 +2036,8 @@ function buildTrialTimeline(
         stimulus:
             function() {
 
+                    initializeTrialFromBackup();
+
                 return `
 
                     <div class="task-header">
@@ -1939,6 +2050,8 @@ function buildTrialTimeline(
                         —
                         最终判断
                     </h2>
+
+                    ${renderBeadLimitNotice()}
 
                     <div class="jar-container">
 
@@ -1996,6 +2109,9 @@ function buildTrialTimeline(
 
                     trial:
                         trial.trialNum,
+
+                    condition:
+                        trial.condition,
 
                     ratio:
                         trial.ratio,
@@ -2086,6 +2202,9 @@ function buildTrialTimeline(
                     trial:
                         trial.trialNum,
 
+                    condition:
+                        trial.condition,
+
                     ratio:
                         trial.ratio,
 
@@ -2133,6 +2252,9 @@ function buildTrialTimeline(
 
                                     trial:
                                         trial.trialNum,
+
+                                    condition:
+                                        trial.condition,
 
                                     bead_index:
                                         dtdVal,
@@ -2277,6 +2399,9 @@ function buildCleanCSV() {
 
                     trial:
                         d.trial,
+
+                    condition:
+                        d.condition,
 
                     ratio:
                         d.ratio,
@@ -2498,6 +2623,8 @@ function buildCleanCSV() {
         "subject",
 
         "trial",
+
+        "condition",
 
         "ratio",
 
@@ -3069,7 +3196,7 @@ var timeline = [
     恢复时直接跳过，不再重做。
 */
 
-trials.forEach(
+presentationTrials.forEach(
     function(t) {
 
         timeline.push({

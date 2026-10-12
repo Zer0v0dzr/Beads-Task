@@ -661,6 +661,9 @@ function restoreBeadsDataToJsPsych(
                         trial:
                             d.trial,
 
+                        condition:
+                            d.condition,
+
                         ratio:
                             d.ratio,
 
@@ -695,6 +698,9 @@ function restoreBeadsDataToJsPsych(
                         trial:
                             d.trial,
 
+                        condition:
+                            d.condition,
+
                         ratio:
                             d.ratio,
 
@@ -725,6 +731,9 @@ function restoreBeadsDataToJsPsych(
 
                         trial:
                             d.trial,
+
+                        condition:
+                            d.condition,
 
                         ratio:
                             d.ratio,
@@ -764,6 +773,9 @@ function restoreBeadsDataToJsPsych(
 
                         trial:
                             f.trial,
+
+                        condition:
+                            f.condition,
 
                         ratio:
                             f.ratio,

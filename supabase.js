@@ -431,6 +431,11 @@ async function uploadBeadsDraw(
     drawData
 ) {
 
+    if (![1, 2, 3, 4].includes(drawData.condition)) {
+        setDBStatus("条件字段无效，本地数据已保留", "error");
+        return false;
+    }
+
     if (
         !supabaseClient
     ) {
@@ -500,6 +505,9 @@ async function uploadBeadsDraw(
 
         trial:
             drawData.trial,
+
+        condition:
+            drawData.condition,
 
         ratio:
             drawData.ratio,
@@ -700,6 +708,14 @@ async function uploadBeadsDraw(
 async function completeBeadsTrial(
     resultData
 ) {
+
+    /* condition 已随 uploadBeadsDraw 写入 beads_draws。
+       原 complete_beads_trial RPC 只补充最终结果，保留该行 condition，
+       无需新增 RPC 参数或修改现有数据库函数签名。 */
+    if (![1, 2, 3, 4].includes(resultData.condition)) {
+        setDBStatus("条件字段无效，本地数据已保留", "error");
+        return false;
+    }
 
     if (
         !supabaseClient
